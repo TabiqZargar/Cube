@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CubeTimer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #08080e;
+  color: #eee;
+  overflow: hidden;
+  height: 100vh;
+  user-select: none;
+}
+#bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(40, 60, 120, 0.12) 0%, transparent 100%),
+    radial-gradient(ellipse 50% 40% at 20% 70%, rgba(100, 40, 120, 0.06) 0%, transparent 100%),
+    radial-gradient(ellipse 50% 40% at 80% 70%, rgba(40, 80, 100, 0.08) 0%, transparent 100%);
+}
+#app {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100dvh;
+  padding: 18px 16px 14px;
+}
+#top {
+  width: 100%;
+  max-width: 800px;
+  text-align: center;
+  flex-shrink: 0;
+}
+#scramble {
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  font-size: clamp(13px, 1.6vw, 19px);
+  color: #7aa2f7;
+  text-align: center;
+  line-height: 1.6;
+  min-height: 2.4em;
+  padding: 6px 14px;
+  background: rgba(26, 27, 38, 0.6);
+  border-radius: 10px;
+  display: inline-block;
+  max-width: 100%;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 2px;
+}
+#timer-wrap {
+  position: relative;
+  display: inline-block;
+  margin: 2px 0;
+}
+#timer {
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  font-size: clamp(52px, 14vw, 130px);
+  font-weight: 250;
+  letter-spacing: 0.04em;
+  color: #c0caf5;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  transition: color 0.2s, text-shadow 0.2s;
+}
+#timer.ready {
+  color: #7aa2f7;
+  text-shadow: 0 0 40px rgba(122, 162, 247, 0.15);
+}
+#timer.running {
+  color: #e0e8ff;
+  text-shadow: 0 0 60px rgba(120, 180, 255, 0.08);
+}
+#timer.stopped {
+  color: #9ece6a;
+  text-shadow: 0 0 40px rgba(158, 206, 106, 0.15);
+}
+#info {
+  font-size: clamp(11px, 0.9vw, 13px);
+  color: #3b3d52;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  transition: color 0.25s;
+  margin-top: 2px;
+  min-height: 1.2em;
+}
+#info.active { color: #565f89; }
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.06; }
+  50% { opacity: 0.15; }
+}
+#canvas-container {
+  flex: 1;
+  width: 100%;
+  max-width: 520px;
+  max-height: 520px;
+  min-height: 0;
+  position: relative;
+  cursor: grab;
+  margin: 4px 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(60, 80, 120, 0.04) 0%, transparent 70%);
+}
+#canvas-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 30%, rgba(10, 10, 20, 0.6) 100%);
+}
+#canvas-container:active { cursor: grabbing; }
+#canvas-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+#bottom {
+  width: 100%;
+  max-width: 700px;
+  flex-shrink: 0;
+  padding-top: 6px;
+}
+#stats {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  background: rgba(18, 18, 30, 0.6);
+  border-radius: 12px;
+  padding: 8px 4px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+#stats .stat {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 4px 2px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+#stats .stat .label {
+  color: #3b3d52;
+  font-size: clamp(9px, 0.7vw, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+#stats .stat .value {
+  color: #a0a8c8;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: clamp(13px, 1vw, 16px);
+  font-variant-numeric: tabular-nums;
+}
+#stats .stat .value.best { color: #9ece6a; }
+#stats .stat .value.worst { color: #f7768e; }
+#times {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 4px 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  justify-content: center;
+  flex-wrap: wrap;
+  min-height: 26px;
+  max-height: 56px;
+  align-content: flex-start;
+  mask-image: linear-gradient(to right, transparent 0%, #000 4px, #000 calc(100% - 4px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 4px, #000 calc(100% - 4px), transparent 100%);
+}
+#times::-webkit-scrollbar { display: none; }
+.time-tag {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: clamp(11px, 0.75vw, 12px);
+  color: #4a4d6a;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(26, 27, 38, 0.5);
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.03);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s;
+}
+.time-tag:hover { background: rgba(26, 27, 38, 0.9); }
+.time-tag.best { color: #9ece6a; background: rgba(158, 206, 106, 0.1); border-color: rgba(158, 206, 106, 0.15); }
+.time-tag.worst { color: #f7768e; background: rgba(247, 118, 142, 0.1); border-color: rgba(247, 118, 142, 0.15); }
+#hint {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #242540;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  font-weight: 500;
+  z-index: 1;
+}
+#scramble-btn {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  background: rgba(26, 27, 38, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #7aa2f7;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.2s;
+  z-index: 10;
+  letter-spacing: 0.02em;
+}
+#scramble-btn:hover { background: rgba(40, 42, 60, 0.9); border-color: rgba(122, 162, 247, 0.3); }
+#scramble-btn:active { transform: scale(0.97); }
+@media (max-width: 640px) {
+  #app { padding: 12px 10px 10px; }
+  #scramble { font-size: clamp(11px, 2.5vw, 13px); padding: 5px 10px; }
+  #canvas-container { max-width: 380px; max-height: 380px; }
+  #scramble-btn { top: 10px; right: 10px; padding: 5px 11px; font-size: 11px; }
+  #stats { border-radius: 10px; gap: 0; padding: 6px 2px; }
+  #hint { font-size: 10px; bottom: 6px; }
+}
+@media (max-width: 420px) {
+  #app { padding: 8px 6px 6px; }
+  #canvas-container { max-width: 280px; max-height: 280px; }
+  #stats { border-radius: 8px; padding: 4px 0; }
+  #stats .stat .value { font-size: 11px; }
+  .time-tag { font-size: 10px; padding: 1px 5px; }
+}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="app">
+  <div id="top">
+    <div id="scramble"></div>
+    <div id="info">Hold spacebar — release to start</div>
+    <div id="timer-wrap"><div id="timer">0.00</div></div>
+  </div>
+  <div id="canvas-container"></div>
+  <div id="bottom">
+    <div id="stats">
+      <div class="stat"><div class="label">Ao5</div><div class="value" id="ao5">—</div></div>
+      <div class="stat"><div class="label">Ao12</div><div class="value" id="ao12">—</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value best" id="best">—</div></div>
+      <div class="stat"><div class="label">Worst</div><div class="value worst" id="worst">—</div></div>
+      <div class="stat"><div class="label">Solves</div><div class="value" id="solves">0</div></div>
+    </div>
+    <div id="times"></div>
+  </div>
+</div>
+<button id="scramble-btn">New Scramble</button>
+<div id="hint">SPACE · hold · release · stop</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─── DOM refs ───
+const scrambleEl = document.getElementById('scramble');
+const timerEl = document.getElementById('timer');
+const infoEl = document.getElementById('info');
+const container = document.getElementById('canvas-container');
+const ao5El = document.getElementById('ao5');
+const ao12El = document.getElementById('ao12');
+const bestEl = document.getElementById('best');
+const worstEl = document.getElementById('worst');
+const solvesEl = document.getElementById('solves');
+const timesEl = document.getElementById('times');
+const scrambleBtn = document.getElementById('scramble-btn');
+
+// ─── State ───
+const state = { phase: 'idle', running: false, startTime: 0, elapsed: 0, animFrame: null, scrambling: false };
+const times = [];
+
+// ─── Three.js setup ───
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+camera.position.set(5.5, 4.5, 5.5);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+controls.minDistance = 4;
+controls.maxDistance = 15;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 2.0;
+
+const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1.8);
+directionalLight.position.set(5, 10, 7);
+scene.add(directionalLight);
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.4);
+fillLight.position.set(-5, -2, -5);
+scene.add(fillLight);
+
+// ─── Cube ───
+const STICKER_COLORS = {
+  right: '#B71234', left: '#FF5800', up: '#FFFFFF', down: '#FFD500', front: '#009E60', back: '#0051BA'
+};
+const FACE_ORDER = ['right', 'left', 'up', 'down', 'front', 'back'];
+const DIR = { right: [1,0,0], left: [-1,0,0], up: [0,1,0], down: [0,-1,0], front: [0,0,1], back: [0,0,-1] };
+
+const cubeGroup = new THREE.Group();
+scene.add(cubeGroup);
+
+function stickerCanvas(hexColor) {
+  const s = 128, inset = s * 0.1;
+  const c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, s, s);
+  ctx.fillStyle = hexColor;
+  ctx.fillRect(inset, inset, s - 2*inset, s - 2*inset);
+  return c;
+}
+
+function cubieMaterials(x, y, z) {
+  const faceColors = [
+    x === 1 ? STICKER_COLORS.right : null,
+    x === -1 ? STICKER_COLORS.left : null,
+    y === 1 ? STICKER_COLORS.up : null,
+    y === -1 ? STICKER_COLORS.down : null,
+    z === 1 ? STICKER_COLORS.front : null,
+    z === -1 ? STICKER_COLORS.back : null,
+  ];
+  return faceColors.map((c, i) => {
+    if (!c) return new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
+    const tex = new THREE.CanvasTexture(stickerCanvas(c));
+    tex.anisotropy = 4;
+    return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, metalness: 0.05 });
+  });
+}
+
+const cubies = [];
+function buildCube() {
+  while (cubeGroup.children.length) {
+    const child = cubeGroup.children[0];
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => {
+        if (m.map) m.map.dispose();
+        m.dispose();
+      });
+    }
+    cubeGroup.remove(child);
+  }
+  cubies.length = 0;
+  const geo = new THREE.BoxGeometry(0.92, 0.92, 0.92);
+  for (let x = -1; x <= 1; x++) {
+    for (let y = -1; y <= 1; y++) {
+      for (let z = -1; z <= 1; z++) {
+        if (x === 0 && y === 0 && z === 0) continue;
+        const mat = cubieMaterials(x, y, z);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.userData = { home: new THREE.Vector3(x, y, z) };
+        cubeGroup.add(mesh);
+        cubies.push(mesh);
+      }
+    }
+  }
+}
+buildCube();
+
+// ─── Face rotation ───
+function getCubiesOnLayer(axis, layer) {
+  const eps = 0.3;
+  const idx = { x: 0, y: 1, z: 2 }[axis];
+  return cubies.filter(c => Math.abs(c.position.getComponent(idx) - layer) < eps);
+}
+
+function animateMove(moveStr, duration = 250) {
+  return new Promise(resolve => {
+    const match = moveStr.match(/^([UDRLFB])(['2]?)$/);
+    if (!match) { resolve(); return; }
+    const [_, face, mod] = match;
+    const axisMap = { U: 'y', D: 'y', R: 'x', L: 'x', F: 'z', B: 'z' };
+    const layerMap = { U: 1, D: -1, R: 1, L: -1, F: 1, B: -1 };
+    const angleMap = {
+      U: -1, "U'": 1, U2: 2, D: 1, "D'": -1, D2: 2,
+      R: -1, "R'": 1, R2: 2, L: 1, "L'": -1, L2: 2,
+      F: -1, "F'": 1, F2: 2, B: 1, "B'": -1, B2: 2,
+    };
+    const fullMove = moveStr;
+    const angle = angleMap[fullMove];
+    if (angle === undefined) { resolve(); return; }
+    const axis = axisMap[face];
+    const layer = layerMap[face];
+    const targetCubies = getCubiesOnLayer(axis, layer);
+    const pivot = new THREE.Object3D();
+    cubeGroup.add(pivot);
+    targetCubies.forEach(c => pivot.attach(c));
+    const radians = angle * Math.PI / 2;
+    const start = performance.now();
+    const axVec = { x: new THREE.Vector3(1,0,0), y: new THREE.Vector3(0,1,0), z: new THREE.Vector3(0,0,1) }[axis];
+    function tick() {
+      const t = Math.min((performance.now() - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      pivot.quaternion.setFromAxisAngle(axVec, radians * eased);
+      controls.update();
+      if (t < 1) { requestAnimationFrame(tick); }
+      else {
+        pivot.quaternion.setFromAxisAngle(axVec, radians);
+        pivot.updateMatrixWorld(true);
+        targetCubies.forEach(c => {
+          const wp = new THREE.Vector3();
+          const wq = new THREE.Quaternion();
+          c.getWorldPosition(wp);
+          c.getWorldQuaternion(wq);
+          cubeGroup.attach(c);
+          c.position.set(Math.round(wp.x * 10) / 10, Math.round(wp.y * 10) / 10, Math.round(wp.z * 10) / 10);
+          if (Math.abs(c.position.x) < 0.2) c.position.x = 0;
+          if (Math.abs(c.position.y) < 0.2) c.position.y = 0;
+          if (Math.abs(c.position.z) < 0.2) c.position.z = 0;
+          c.quaternion.copy(wq);
+          const eps = 0.01;
+          c.quaternion.x = Math.abs(c.quaternion.x) < eps ? 0 : Math.round(c.quaternion.x * 1000) / 1000;
+          c.quaternion.y = Math.abs(c.quaternion.y) < eps ? 0 : Math.round(c.quaternion.y * 1000) / 1000;
+          c.quaternion.z = Math.abs(c.quaternion.z) < eps ? 0 : Math.round(c.quaternion.z * 1000) / 1000;
+          c.quaternion.w = Math.round(c.quaternion.w * 1000) / 1000;
+        });
+        cubeGroup.remove(pivot);
+        controls.autoRotate = true;
+        resolve();
+      }
+    }
+    controls.autoRotate = false;
+    tick();
+  });
+}
+
+// ─── Scramble ───
+function getAxis(f) { return { U:1, D:1, R:2, L:2, F:3, B:3 }[f]; }
+function oppositeFace(f) { return { U:'D', D:'U', R:'L', L:'R', F:'B', B:'F' }[f]; }
+function generateScramble(length = 20) {
+  const faces = ['U','D','R','L','F','B'];
+  const mods = ['', "'", '2'];
+  const moves = [];
+  let last = '', second = '';
+  for (let i = 0; i < length; i++) {
+    let f;
+    let attempts = 0;
+    do {
+      f = faces[Math.floor(Math.random() * faces.length)];
+      attempts++;
+    } while (
+      (f === last || (getAxis(f) === getAxis(last) && getAxis(last) === getAxis(second))) &&
+      attempts < 100
+    );
+    const m = mods[Math.floor(Math.random() * mods.length)];
+    moves.push(f + m);
+    second = last;
+    last = f;
+  }
+  return moves;
+}
+
+let currentScramble = [];
+
+async function applyScramble(moves) {
+  controls.autoRotate = false;
+  for (const m of moves) {
+    await animateMove(m, 200);
+    await new Promise(r => setTimeout(r, 30));
+  }
+  controls.autoRotate = true;
+}
+
+async function newScramble() {
+  if (state.scrambling) return;
+  state.scrambling = true;
+  scrambleBtn.textContent = 'Scrambling...';
+  currentScramble = generateScramble(20);
+  scrambleEl.textContent = currentScramble.join('  ');
+  await applyScramble(currentScramble);
+  state.scrambling = false;
+  scrambleBtn.textContent = 'New Scramble';
+}
+
+// ─── Solve checking ───
+function isSolved() {
+  return cubies.every(c => {
+    const h = c.userData.home;
+    const p = c.position;
+    return Math.abs(p.x - h.x) < 0.3 && Math.abs(p.y - h.y) < 0.3 && Math.abs(p.z - h.z) < 0.3;
+  });
+}
+
+// ─── Timer ───
+function formatTime(ms) {
+  if (ms < 0) ms = 0;
+  const totalSec = ms / 1000;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min > 0) return `${min}:${sec.toFixed(2).padStart(5, '0')}`;
+  return sec.toFixed(2);
+}
+
+function updateTimerDisplay() {
+  if (state.running) {
+    state.elapsed = performance.now() - state.startTime;
+    timerEl.textContent = formatTime(state.elapsed);
+    state.animFrame = requestAnimationFrame(updateTimerDisplay);
+  }
+}
+
+function startTimer() {
+  state.running = true;
+  state.phase = 'running';
+  state.startTime = performance.now();
+  state.elapsed = 0;
+  timerEl.className = 'running';
+  infoEl.textContent = 'Solving...';
+  infoEl.classList.add('active');
+  timerEl.textContent = '0.00';
+  updateTimerDisplay();
+}
+
+function stopTimer() {
+  if (!state.running) return;
+  state.running = false;
+  if (state.animFrame) cancelAnimationFrame(state.animFrame);
+  state.phase = 'stopped';
+  const t = state.elapsed;
+  times.push(t);
+  timerEl.className = 'stopped';
+  timerEl.style.animation = 'pop 0.3s ease';
+  infoEl.textContent = 'Solve recorded';
+  infoEl.classList.add('active');
+  updateStats();
+  if (isSolved()) {
+    infoEl.textContent += ' ✓ Solved!';
+  }
+  setTimeout(() => {
+    if (state.phase === 'stopped') {
+      state.phase = 'idle';
+      timerEl.className = '';
+      timerEl.style.animation = '';
+      infoEl.textContent = 'Hold spacebar — release to start';
+      infoEl.classList.remove('active');
+      newScramble();
+    }
+  }, 2000);
+}
+
+function resetTimer() {
+  state.running = false;
+  if (state.animFrame) cancelAnimationFrame(state.animFrame);
+  state.phase = 'idle';
+  state.elapsed = 0;
+  timerEl.textContent = '0.00';
+  timerEl.className = '';
+  timerEl.style.animation = '';
+  infoEl.textContent = 'Hold spacebar — release to start';
+  infoEl.classList.remove('active');
+}
+
+// ─── Stats ───
+function avg(arr) {
+  if (arr.length < 3) return null;
+  const sorted = [...arr].sort((a,b) => a - b);
+  const trimmed = sorted.slice(1, -1);
+  return trimmed.reduce((s,v) => s + v, 0) / trimmed.length;
+}
+
+function avgN(n) {
+  if (times.length < n) return null;
+  const recent = times.slice(-n);
+  return avg(recent);
+}
+
+function updateStats() {
+  const ao5 = avgN(5);
+  const ao12 = avgN(12);
+  const best = times.length ? Math.min(...times) : null;
+  const worst = times.length ? Math.max(...times) : null;
+  ao5El.textContent = ao5 !== null ? formatTime(ao5) : '—';
+  ao12El.textContent = ao12 !== null ? formatTime(ao12) : '—';
+  bestEl.textContent = best !== null ? formatTime(best) : '—';
+  worstEl.textContent = worst !== null ? formatTime(worst) : '—';
+  solvesEl.textContent = times.length;
+  renderTimes();
+}
+
+function renderTimes() {
+  const best = times.length ? Math.min(...times) : null;
+  const worst = times.length ? Math.max(...times) : null;
+  timesEl.innerHTML = times.map((t, i) => {
+    let cls = 'time-tag';
+    if (t === best && best !== worst) cls += ' best';
+    else if (t === worst && worst !== best) cls += ' worst';
+    return `<span class="${cls}">${formatTime(t)}</span>`;
+  }).join('');
+  timesEl.scrollTop = timesEl.scrollHeight;
+}
+
+// ─── Keyboard ───
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !e.repeat && e.target === document.body) {
+    e.preventDefault();
+    if (state.scrambling) return;
+    if (state.phase === 'idle' || state.phase === 'ready') {
+      state.phase = 'ready';
+      timerEl.className = 'ready';
+      infoEl.textContent = 'Release to start';
+      infoEl.classList.add('active');
+    }
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    if (state.phase === 'ready') {
+      startTimer();
+    } else if (state.phase === 'running') {
+      stopTimer();
+    }
+  }
+});
+
+// ─── Touch support for timer ───
+let touchStartTime = 0;
+container.addEventListener('touchstart', e => {
+  // Only handle if not interacting with 3D (allow orbit on cube)
+});
+
+document.addEventListener('touchstart', e => {
+  if (e.target === container || container.contains(e.target)) return;
+  if (state.phase === 'idle') {
+    state.phase = 'ready';
+    timerEl.className = 'ready';
+    infoEl.textContent = 'Release to start';
+    infoEl.classList.add('active');
+    touchStartTime = performance.now();
+  }
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+  if (state.phase === 'ready') {
+    startTimer();
+  } else if (state.phase === 'running') {
+    stopTimer();
+    state.phase = 'idle';
+  }
+}, { passive: true });
+
+// ─── Buttons ───
+scrambleBtn.addEventListener('click', () => {
+  if (state.running || state.scrambling) return;
+  resetTimer();
+  newScramble();
+});
+
+// ─── Resize ───
+function resize() {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+new ResizeObserver(resize).observe(container);
+
+// ─── Render loop ───
+function render() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(render);
+}
+render();
+
+// ─── Init ───
+newScramble();
+resize();
+
+console.log('CubeTimer ready — hold SPACE to start');
+</script>
+</body>
+</html>
