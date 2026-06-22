@@ -29,8 +29,6 @@ Hold Space → Release → Solve → Press Space
 python -m http.server 8080
 ```
 
-Open **http://localhost:8080** in a browser.
-
 *An HTTP server is required because Three.js is loaded via ES module imports (`importmap`), which need CORS-compatible serving.*
 
 ### Requirements
