@@ -8,7 +8,7 @@ Hold Space → Release → Solve → Press Space
 
 ## Live Demo
 
-**http://localhost:8080**
+**https://tabiqzargar.github.io/Cube/**
 
 *Serve locally with any HTTP server — see Setup below.*
 
